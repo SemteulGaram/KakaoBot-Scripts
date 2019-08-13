@@ -104,9 +104,9 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
   // Is target time
   if (!((s[0] === e[0] ? s[1] > e[1] : s[0] > e[0]) ?
     ((s[0] === cHours ? s[1] <= cMinutes : s[0] <= cHours)
-    || (e[0] === cHours ? e[1] >= cMinutes : e[0] >= cMinutes))
+    || (e[0] === cHours ? e[1] >= cMinutes : e[0] >= cHours))
     : ((s[0] === cHours ? s[1] >= cMinutes : s[1] >= cHours)
-    && (e[0] === cHours ? e[1] <= cMinutes : e[1] <= cMinutes))
+    && (e[0] === cHours ? e[1] <= cMinutes : e[1] <= cHours))
     )) return;
 
   for (var i in config.callerName) {
