@@ -6,8 +6,8 @@ const config = {
   targetLogRoom: 'EXAMPLE_TARGET_FOR_LOG',
   callName: ['NICK_NAME', 'ALIAS_NAME', 'ANOTHOR_NAME'],
   callerName: ['NICK_NAME', 'ALIAS_NAME', 'ANOTHOR_NAME'],
-  startHourMin: [18, 0],
-  endHourMin: [24, 0],
+  startHourMin: [23, 0],
+  endHourMin: [1, 0],
   TAG: 'ViseAlert'
 };
 
@@ -98,10 +98,16 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
   const current = new Date();
   const cHours = current.getHours();
   const cMinutes = current.getMinutes()
+  const s = config.startHourMin;
+  const e = config.endHourMin;
 
   // Is target time
-  if (!(config.startHourMin[0] <= cHours && config.startHourMin[1] <= cMinutes
-    && config.endHourMin[0] >= cHours && config.endHourMin[1] <= cMinutes)) return;
+  if (!((s[0] === e[0] ? s[1] > e[1] : s[0] > e[0]) ?
+    ((s[0] === cHours ? s[1] <= cMinutes : s[0] <= cHours)
+    || (e[0] === cHours ? e[1] >= cMinutes : e[0] >= cMinutes)
+    : ((s[0] === cHours ? s[1] >= cMinutes : s[1] >= cHours)
+    && (e[0] === cHours ? e[1] <= cMinutes : e[1] <= cMinutes))
+    )) return;
 
   for (var i in config.callerName) {
     // Is target caller name
@@ -118,7 +124,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
   }
 }
 
-function onStartCompile(){
+function onStartCompile() {
 
 }
 
