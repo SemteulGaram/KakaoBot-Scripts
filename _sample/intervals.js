@@ -1,5 +1,5 @@
 // setInterval in Rhino: https://stackoverflow.com/a/22337881
-(function(global) {
+;(function(global) {
   var timer = new java.util.Timer();
   var counter = 1;
   var ids = {};

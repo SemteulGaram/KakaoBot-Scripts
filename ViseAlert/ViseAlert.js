@@ -6,13 +6,13 @@ const config = {
   targetLogRoom: 'EXAMPLE_TARGET_FOR_LOG',
   callName: ['NICK_NAME', 'ALIAS_NAME', 'ANOTHOR_NAME'],
   callerName: ['NICK_NAME', 'ALIAS_NAME', 'ANOTHOR_NAME'],
-  startHourMin: [18, 00],
-  endHourMin: [24, 00]
+  startHourMin: [18, 0],
+  endHourMin: [24, 0],
   TAG: 'ViseAlert'
-}
+};
 
 // setInterval in Rhino: https://stackoverflow.com/a/22337881
-(function(global) {
+;(function(global) {
   var timer = new java.util.Timer();
   var counter = 1;
   var ids = {};
