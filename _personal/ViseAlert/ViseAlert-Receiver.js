@@ -1,4 +1,4 @@
-const scriptName="ViseAlert.js";
+const scriptName="ViseAlert-Receiver.js";
 const VERSION = 'v1.0';
 
 const config = {
@@ -56,6 +56,10 @@ const local = {
   requestAt: 0,
   requestTimeoutUid: null,
   lastData: {}
+}
+
+function isOn() {
+  return Api.isOn(scriptName);
 }
 
 function sendChat(msg) {
@@ -127,6 +131,7 @@ function clearRequestTimeout() {
 function _doRequestTimeout() {
   clearRequestTimeout();
   try {
+    if (!isOn()) return;
     sendChat(config.TAG + '"' + local.lastData.callname + '"' + '카카오톡으로부터 응답이 없습니다.')
   } catch (err) {
     sendLog(err, true, true);
@@ -144,40 +149,50 @@ function doTask(callname, sender) {
 }
 
 function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
+  if (!isOn()) {
+    Api.error(scriptName + '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
+      + '\nscriptName을 확인해주세요.', true);
+    Api.makeNoti(scriptName, '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
+      + '\nscriptName을 확인해주세요.', 7101);
+    return;
+  }
   // ready script
   if (!isReady()) return;
 
   // Is target chat room
-  if (room !== config.targetRoom) return;
+  if (room === config.targetRoom) {
+    // Is last request handle?
+    // TODO: last request handle
 
-  // Is last request handle?
+    const current = new Date();
+    const cHours = current.getHours();
+    const cMinutes = current.getMinutes()
+    const s = config.startHourMin;
+    const e = config.endHourMin;
 
-  const current = new Date();
-  const cHours = current.getHours();
-  const cMinutes = current.getMinutes()
-  const s = config.startHourMin;
-  const e = config.endHourMin;
+    // Is target time
+    if (!((s[0] === e[0] ? s[1] > e[1] : s[0] > e[0]) ?
+      ((s[0] === cHours ? s[1] <= cMinutes : s[0] <= cHours)
+      || (e[0] === cHours ? e[1] >= cMinutes : e[0] >= cHours))
+      : ((s[0] === cHours ? s[1] >= cMinutes : s[1] >= cHours)
+      && (e[0] === cHours ? e[1] <= cMinutes : e[1] <= cHours))
+      )) return;
 
-  // Is target time
-  if (!((s[0] === e[0] ? s[1] > e[1] : s[0] > e[0]) ?
-    ((s[0] === cHours ? s[1] <= cMinutes : s[0] <= cHours)
-    || (e[0] === cHours ? e[1] >= cMinutes : e[0] >= cHours))
-    : ((s[0] === cHours ? s[1] >= cMinutes : s[1] >= cHours)
-    && (e[0] === cHours ? e[1] <= cMinutes : e[1] <= cHours))
-    )) return;
+    for (var i in config.callerName) {
+      // Is target caller name
+      if (config.callerName[i] !== sender) continue;
 
-  for (var i in config.callerName) {
-    // Is target caller name
-    if (config.callerName[i] !== sender) continue;
+      for (var i in config.callName) {
+        // Is target call name
+        if (!msg.match(config.callName[i])) continue;
 
-    for (var i in config.callName) {
-      // Is target call name
-      if (!msg.match(config.callName[i])) continue;
-
-      const cCallName = config.callName[i];
-      doTask(cCallName, sender);
-      return;
+        const cCallName = config.callName[i];
+        doTask(cCallName, sender);
+        return;
+      }
     }
+  } else if (room === config.targetDataRoom) {
+    // TODO: data revice
   }
 }
 
@@ -185,9 +200,7 @@ function onStartCompile() {
 
 }
 
-function onCreate(savedInstanceState,activity) {
-
-}
+function onCreate(savedInstanceState,activity) {}
 function onResume(activity) {}
 function onPause(activity) {}
 function onStop(activity) {}
