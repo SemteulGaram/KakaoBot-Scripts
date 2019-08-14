@@ -4,11 +4,15 @@ const VERSION = 'v1.0';
 const config = {
   targetRoom: 'EXAMPLE_TARGET',
   targetLogRoom: 'EXAMPLE_TARGET_FOR_LOG',
+  targetDataRoom: 'EXAMPLE_TARGET_FOR_DATA_LINK',
+  scriptDataTag: 'VA|',
+  requestTimeout: 5000,
+  waitResponseTime: 10000,
   callName: ['NICK_NAME', 'ALIAS_NAME', 'ANOTHOR_NAME'],
   callerName: ['NICK_NAME', 'ALIAS_NAME', 'ANOTHOR_NAME'],
   startHourMin: [23, 0],
   endHourMin: [1, 0],
-  TAG: 'ViseAlert'
+  TAG: 'ViseAlert> '
 };
 
 // setInterval in Rhino: https://stackoverflow.com/a/22337881
@@ -47,11 +51,16 @@ const config = {
 })(this);
 
 const local = {
-  status: 'NOTREADY'
+  status: 'NOTREADY',
+  requestId: 0,
+  requestAt: 0,
+  requestTimeoutUid: null,
+  lastData: {}
 }
 
 function sendChat(msg) {
-  Api.replyRoom(config.targetRoom, '' + msg);
+  if (Api.canReply(config.targetRoom))
+    Api.replyRoom(config.targetRoom, '' + msg);
 }
 
 function sendLog(msg, isError, showToast) {
@@ -65,18 +74,30 @@ function sendLog(msg, isError, showToast) {
     Api.replyRoom(config.targetLogRoom, msg);
 }
 
+function sendData(obj) {
+  if (Api.canReply(config.targetDataRoom))
+    Api.replyRoom(config.targetDataRoom, config.scriptDataTag + JSON.stringify(obj));
+}
+
 function isReady() {
   if (!Api.canReply(config.targetLogRoom)) {
     if (local.status !== 'NOTREADY1') {
       local.status = 'NOTREADY1';
-      Log.info(config.TAG + '> "' + config.targetLogRoom
+      Log.info(config.TAG + '"' + config.targetLogRoom
       + '" 채팅방으로 부터 메시지를 수신해야 업데이트가 시작됩니다');
     }
     return false;
   } else if (!Api.canReply(config.targetRoom)) {
     if (local.status !== 'NOTREADY2') {
       local.status = 'NOTREADY2';
-      sendChat(config.TAG + '> "' + config.targetRoom
+      sendChat(config.TAG + '"' + config.targetRoom
+      + '" 채팅방으로 부터 메시지를 수신해야 업데이트가 시작됩니다');
+    }
+    return false;
+  } else if (!Api.canReply(config.targetDataRoom)) {
+    if (local.status !== 'NOTREADY3') {
+      local.status = 'NOTREADY3';
+      sendChat(config.TAG + '"' + config.targetDataRoom
       + '" 채팅방으로 부터 메시지를 수신해야 업데이트가 시작됩니다');
     }
     return false;
@@ -84,8 +105,42 @@ function isReady() {
   return true
 }
 
+function isRequestExpired() {
+  return !local.requestAt || (local.requestAt + config.requestTimeout) < Date.now())
+}
+
+function hasRequestTimeout() {
+  return !!local.requestTimeoutUid;
+}
+
+function setRequestTimeout() {
+  if (hasRequestTimeout()) return;
+  local.requestTimeoutUid = setTimeout(_doRequestTimeout, config.requestTimeout);
+}
+
+function clearRequestTimeout() {
+  if (!hasRequestTimeout()) return;
+  clearTimeout(local.requestTimeoutUid);
+  local.requestTimeoutUid = null;
+}
+
+function _doRequestTimeout() {
+  clearRequestTimeout();
+  try {
+    sendChat(config.TAG + '"' + local.lastData.callname + '"' + '카카오톡으로부터 응답이 없습니다.')
+  } catch (err) {
+    sendLog(err, true, true);
+  }
+}
+
 function doTask(callname, sender) {
-  sendLog(config.TAG + '> ' + sender + ' call you: ' + callname);
+  if (hasRequestTimeout()) {
+    if (isRequestExpired()) _doRequestTimeout();
+    return;
+  }
+
+  local.lastData = { callname, sender };
+  // TODO: run task
 }
 
 function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
@@ -94,6 +149,8 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 
   // Is target chat room
   if (room !== config.targetRoom) return;
+
+  // Is last request handle?
 
   const current = new Date();
   const cHours = current.getHours();
