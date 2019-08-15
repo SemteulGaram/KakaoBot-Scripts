@@ -105,7 +105,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 }
 
 function onStartCompile() {
-
+  Api.getContext().unregisterReceiver(phoneUnlockReceiver);
 }
 
 function onCreate(savedInstanceState,activity) {}
