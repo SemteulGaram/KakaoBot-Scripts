@@ -150,7 +150,7 @@ function doTask(callname, sender) {
 
 function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
   if (!isOn()) {
-    Api.error(scriptName + '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
+    Log.error(scriptName + '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
       + '\nscriptName을 확인해주세요.', true);
     Api.makeNoti(scriptName, '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
       + '\nscriptName을 확인해주세요.', 7101);

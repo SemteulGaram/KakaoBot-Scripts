@@ -1,4 +1,4 @@
-const scriptName="ViseAlert-Receiver.js";
+const scriptName="ViseAlert-Client.js";
 const VERSION = 'v1.0';
 
 const config = {
@@ -14,7 +14,9 @@ const IntentFilter = android.content.IntentFilter;
 const Intent = android.content.Intent;
 
 const local = {
-  status: 'NOTREADY'
+  status: 'NOTREADY',
+  lastSleep: Date.now(),
+  lastAwake: Date.now()
 }
 
 function isOn() {
@@ -42,20 +44,20 @@ function sendData(obj) {
     Api.replyRoom(config.targetDataRoom, config.scriptDataTag + JSON.stringify(obj));
 }
 
-const PhoneUnlockReceiver = new JavaAdapter(BroadcastReceiver, {
+const phoneUnlockReceiver = new JavaAdapter(BroadcastReceiver, {
   onReceive: function(context, intent) {
     try {
+      // if (!isOn()) return; No Need to block
       if (intent.getAction().equals(Intent.ACTION_USER_PRESENT)) {
-        Log.debug('awake');
+        local.lastAwake = Date.now();
       } else if (intent.getAction().equals(Intent.ACTION_SCREEN_OFF)) {
-        Log.debug('sleep');
+        local.lastSleep = Date.now();
       }
     } catch (err) {
       Log.error(err);
     }
   }
 });
-const phoneUnlockReceiver = new PhoneUnlockReceiver();
 
 const receiverFilter = new IntentFilter();
 receiverFilter.addAction(Intent.ACTION_USER_PRESENT);
@@ -91,7 +93,7 @@ function isReady() {
 
 function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
   if (!isOn()) {
-    Api.error(scriptName + '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
+    Log.error(scriptName + '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
       + '\nscriptName을 확인해주세요.', true);
     Api.makeNoti(scriptName, '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
       + '\nscriptName을 확인해주세요.', 7101);
@@ -100,8 +102,26 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
   // ready script
   if (!isReady()) return;
 
-  // Is target chat room
+  // Is target data chat room
   if (room !== config.targetDataRoom) return;
+  
+  if (msg.length >= config.scriptDataTag.length && msg.substring(0, config.scriptDataTag.length) === config.scriptDataTag) {
+    const content = msg.substring(config.scriptDataTag.length, msg.length);
+    
+    try {
+      const data = JSON.parse(content);
+      if (data.t === 1) { // getAwakeInfo
+        sendData({
+          t: 1,  // type: getAwakeInfo response
+          i: data.i,  // id
+          a: (local.lastAwake >= local.lastSleep ? 1 : 0),  // isAwake
+          l: Date.now() - local.lastSleep // last sleep lapse
+        });
+      }
+    } catch (err) {
+      sendLog(err);
+    }
+  }
 }
 
 function onStartCompile() {
