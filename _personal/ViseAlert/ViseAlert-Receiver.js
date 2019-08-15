@@ -8,10 +8,12 @@ const config = {
   scriptDataTag: 'VA|',
   requestTimeout: 5000,
   waitResponseTime: 10000,
+  callCooltime: 300000,
   callName: ['NICK_NAME', 'ALIAS_NAME', 'ANOTHOR_NAME'],
   callerName: ['NICK_NAME', 'ALIAS_NAME', 'ANOTHOR_NAME'],
   startHourMin: [23, 0],
   endHourMin: [1, 0],
+  afkTime: 1800000
   TAG: 'ViseAlert> '
 };
 
@@ -55,7 +57,8 @@ const local = {
   requestId: 0,
   requestAt: 0,
   requestTimeoutUid: null,
-  lastData: {}
+  lastData: {},
+  lastRequestAt: 0
 }
 
 function isOn() {
@@ -87,22 +90,22 @@ function isReady() {
   if (!Api.canReply(config.targetLogRoom)) {
     if (local.status !== 'NOTREADY1') {
       local.status = 'NOTREADY1';
-      Log.info(config.TAG + '"' + config.targetLogRoom
+      Log.info('VAR> "' + config.targetLogRoom
       + '" 채팅방으로 부터 메시지를 수신해야 업데이트가 시작됩니다');
     }
     return false;
   } else if (!Api.canReply(config.targetRoom)) {
     if (local.status !== 'NOTREADY2') {
       local.status = 'NOTREADY2';
-      sendChat(config.TAG + '"' + config.targetRoom
-      + '" 채팅방으로 부터 메시지를 수신해야 업데이트가 시작됩니다');
+      sendLog('VAR> "' + config.targetRoom
+      + '" 채팅방으로 부터 메시지를 수신해야 업데이트가 시작됩니다', true, true);
     }
     return false;
   } else if (!Api.canReply(config.targetDataRoom)) {
     if (local.status !== 'NOTREADY3') {
       local.status = 'NOTREADY3';
-      sendChat(config.TAG + '"' + config.targetDataRoom
-      + '" 채팅방으로 부터 메시지를 수신해야 업데이트가 시작됩니다');
+      sendLog('VAR> "' + config.targetDataRoom
+      + '" 채팅방으로 부터 메시지를 수신해야 업데이트가 시작됩니다', true, true);
     }
     return false;
   }
@@ -132,27 +135,61 @@ function _doRequestTimeout() {
   clearRequestTimeout();
   try {
     if (!isOn()) return;
-    sendChat(config.TAG + '"' + local.lastData.callname + '"' + '카카오톡으로부터 응답이 없습니다.')
+    local.requestId++;  // 만약 응답이 나중에 돌아오더라도 무시되게 Id를 넘겨버림
+    sendChat(config.TAG + '"' + local.lastData.callname + '"' + '카카오톡으로부터 응답이 없습니다.');
+    // TODO: Alternative task
   } catch (err) {
     sendLog(err, true, true);
   }
 }
 
 function doTask(callname, sender) {
+  // Handle cooltime
+  const now = Date.now();
+  if (now - local.lastRequestAt < config.callCooltime) {
+    Log.debug('VAR>doTask> ignore by cooltime');
+    return;
+  }
+  local.lastRequestAt = now;
+  
+  // Handle previous timeout
   if (hasRequestTimeout()) {
     if (isRequestExpired()) _doRequestTimeout();
     return;
   }
-
+  
+  // set last request data
   local.lastData = { callname, sender };
-  // TODO: run task
+  const id = ++local.requestId;
+  
+  // send request
+  sendData({
+    t: 1,
+    i: id
+  });
+}
+
+function handleResponse (content) {
+  try {
+    const data = JSON.parse(content);
+    if (data.t === 1  // getAwakeInfo
+      && data.i === local.requestId) {
+      
+      clearRequestTimeout();
+      if (!data.a && data.l > config.afkTime) {
+        // sendChat(config.TAG + '조건을 만족했습니다'
+      }
+    }
+  } catch (err) {
+    sendLog(err, true, true);
+  }
 }
 
 function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
   if (!isOn()) {
-    Log.error(scriptName + '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
+    Log.error('VAR> ' + scriptName + '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
       + '\nscriptName을 확인해주세요.', true);
-    Api.makeNoti(scriptName, '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
+    Api.makeNoti('VAR> ' + scriptName, '스크립트가 메시지를 수신했지만 비활성화 상태로 표시됩니다.'
       + '\nscriptName을 확인해주세요.', 7101);
     return;
   }
@@ -192,7 +229,10 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
       }
     }
   } else if (room === config.targetDataRoom) {
-    // TODO: data revice
+    // Check valid data
+    if (msg.length >= config.scriptDataTag.length && msg.substring(0, config.scriptDataTag.length) === config.scriptDataTag) {
+      handleResponse(msg.substring(config.scriptDataTag.length, msg.length));
+    }
   }
 }
 
