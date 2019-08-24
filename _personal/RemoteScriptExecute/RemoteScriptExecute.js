@@ -1,5 +1,5 @@
 const scriptName = "RemoteScriptExecute.js";
-const VERSION = 'v1.1';
+const VERSION = 'v1.2';
 
 const config = {
   targetRoom: 'EXAMPLE_TARGET',
@@ -23,7 +23,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
     try {
       replier.reply(eval(config.evalPrefix + content) + '\nFINISHED');
     } catch (err) {
-      replier.reply(err + '\nUNEXPECTED ERROR OCCUR');
+      replier.reply('[RSE ERROR LINE: ' + err.lineNumber + ']\n' + err);
     }
   }
 }
