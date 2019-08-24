@@ -1,13 +1,13 @@
 const scriptName = "RemoteScriptExecute.js";
-const VERSION = 'v1.0';
+const VERSION = 'v1.1';
 
 const config = {
   targetRoom: 'EXAMPLE_TARGET',
   commandExecute: '/rse',
   evalPrefix: 'var _debug=Log.debug,_info=Log.info,_error=Log.error;'
-    + 'Log.debug=function(){sendChat(arguments.join(' '));_debug.apply(Log, arguments)};'
-    + 'Log.info=function(){sendChat(arguments.join(' '));_info.apply(Log, arguments)};'
-    + 'Log.error=function(){sendChat(arguments.join(' '));_error.apply(Log, arguments)};'
+    + 'Log.debug=function(){sendChat(Array.prototype.join.call(arguments, " "));_debug.apply(Log, arguments)};'
+    + 'Log.info=function(){sendChat(Array.prototype.join.call(arguments, " "));_info.apply(Log, arguments)};'
+    + 'Log.error=function(){sendChat(Array.prototype.join.call(arguments, " "));_error.apply(Log, arguments)};'
 };
 
 function sendChat(msg) {
