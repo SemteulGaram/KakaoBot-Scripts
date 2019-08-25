@@ -1,2 +1,2 @@
 # Personal
-Very personal purpose scripts
+Script with unexplained features just for me
