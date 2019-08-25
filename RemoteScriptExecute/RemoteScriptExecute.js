@@ -1,13 +1,10 @@
 const scriptName = "RemoteScriptExecute.js";
-const VERSION = 'v1.4';
+const VERSION = 'v1.5';
 
 const config = {
   targetRoom: 'EXAMPLE_TARGET',
   commandExecute: '/rse',
-  evalPrefix: 'var _debug=Log.debug,_info=Log.info,_error=Log.error,Log={};'
-    + 'Log.debug=function(){sendChat(Array.prototype.join.call(arguments, " "));_debug.apply(Log, arguments)};Log.d=Log.debug;'
-    + 'Log.info=function(){sendChat(Array.prototype.join.call(arguments, " "));_info.apply(Log, arguments)};Log.i=Log.info;'
-    + 'Log.error=function(){sendChat(Array.prototype.join.call(arguments, " "));_error.apply(Log, arguments)};Log.e=Log.error;'
+  evalPrefix: ''
 };
 
 const local = {};
@@ -17,6 +14,25 @@ config.commandExecute += ' ';
 function sendChat(msg) {
   Api.replyRoom(config.targetRoom, msg);
 }
+
+var _debug = Log.debug;
+var _info = Log.info;
+var _error = Log.error;
+Log.debug = function() {
+  sendChat(Array.prototype.join.call(arguments, " "));
+  _debug.apply(_Log, arguments);
+};
+Log.d = Log.debug;
+Log.info = function() {
+  sendChat(Array.prototype.join.call(arguments, " "));
+  _info.apply(_Log, arguments);
+};
+Log.i = Log.info;
+Log.error = function() {
+  sendChat(Array.prototype.join.call(arguments, " "));
+  _error.apply(_Log, arguments);
+};
+Log.e = Log.error;
 
 function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
   // Is target data chat room
