@@ -1,5 +1,5 @@
 const scriptName = "RemoteScriptExecute.js";
-const VERSION = 'v1.5';
+const VERSION = 'v1.6';
 
 const config = {
   targetRoom: 'EXAMPLE_TARGET',
@@ -15,22 +15,22 @@ function sendChat(msg) {
   Api.replyRoom(config.targetRoom, msg);
 }
 
-var _debug = Log.debug;
-var _info = Log.info;
-var _error = Log.error;
+var __rseDebug = Log.debug;
+var __rseInfo = Log.info;
+var __rseError = Log.error;
 Log.debug = function() {
   sendChat(Array.prototype.join.call(arguments, " "));
-  _debug.apply(_Log, arguments);
+  __rseDebug.apply(Log, arguments);
 };
 Log.d = Log.debug;
 Log.info = function() {
   sendChat(Array.prototype.join.call(arguments, " "));
-  _info.apply(_Log, arguments);
+  __rseInfo.apply(Log, arguments);
 };
 Log.i = Log.info;
 Log.error = function() {
   sendChat(Array.prototype.join.call(arguments, " "));
-  _error.apply(_Log, arguments);
+  __rseError.apply(Log, arguments);
 };
 Log.e = Log.error;
 
