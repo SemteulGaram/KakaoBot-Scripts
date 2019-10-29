@@ -2,12 +2,13 @@ const scriptName="DcObserver.js";
 const VERSION = 'v1.0';
 
 const config = {
+  TAG: 'Observer> ',
   targetLogRoom: 'EXAMPLE_TARGET_FOR_LOG',
   whitelist: [],
   blacklist: [],
   defaultObserveDelay: 10000,
   taskFile: '/sdcard/katalkbot/config/DcObserver.json',
-  TAG: 'Observer> '
+  connectionRetryCount: 10
 };
 
 // setInterval in Rhino: https://stackoverflow.com/a/22337881
@@ -111,7 +112,10 @@ const local = {
   data: null, // task data
   intervalUid: null, // loop id
   lastUpdateAt: null, // loop missing solution
-  interaction: {} // user command interaction data
+  interaction: {}, // user command interaction data,
+  connectionFailCount: {}, // message is sent when config.connectionRetryCount is exceeded (key: galleryId)
+  dcObservingLastStatus: {}, // cache of last status (key: galleryId)
+  dcObservingCache: {} // copy of last list to detect new item (key: galleryId)
 }
 
 function sendLog() {
@@ -134,7 +138,7 @@ function loadTask() {
   if (content == null) {
     // init
     local.data = {
-      // { gid: [GalleryId], pattern: [ 'match1', 'match2' ] }
+      // { targetRoom: [ChatRoom], gid: [GalleryId], pattern: [ 'match1', 'match2' ] }
       search: []
     }
     return;
@@ -172,7 +176,58 @@ function stopTaskLoop() {
   local.intervalUid = null;
 }
 
-function _dcObserving(galleryId, searchOptions) {
+function _dcObserving(galleryId, taskList) {
+  // ensure
+  local.connectionFailCount[galleryId] = local.connectionFailCount[galleryId] || 0;
+  local.dcObservingLastStatus[galleryId] = local.dcObservingLastStatus[galleryId] || null;
+
+  // canReply check
+  const filteredTaskList = taskList.filter(task => { return Api.canReply(task.targetRoom) });
+  if (taskList.length === 0) {
+    if (local.dcObservingLastStatus[galleryId] !== 'ERRCANTREPLYALL') {
+      local.dcObservingLastStatus[galleryId] = 'ERRCANTREPLYALL';
+      reportError(config.TAG + '"' + galleryId + '" 갤러리의 알림을 받을 채팅방 모두에 답장을 할 수 없습니다.'
+        + '\n' + taskList.map(v => { return v.targetRoom }).join(', ')
+        + '\n해당 채팅방에서 메시지를 한번씩 수신하면 시작합니다');
+    }
+    return;
+  }
+
+  try {
+    const url = 'https://gall.dcinside.com/mgallery/board/lists?id=' + encodeURIComponent(galleryId);
+    const jsoup = Utils.parse(url);
+  } catch (err) {
+    if (++local.connectionFailCount[galleryId] == config.connectionRetryCount) {
+      reportError(config.TAG + '연결 실패 횟수 '
+        + local.connectionFailCount[galleryId] + '회 초과.\n"' + galleryId
+        + '" 갤러리에 대해 옵저빙이 진행되지 않고 있습니다...\n\n마지막 오류:' + inspect(err));
+    } else {
+      Log.info(config.TAG + 'ConnectionFail----------\nURL:' + url
+        + '\nAttempt: ' + local.connectionFailCount[galleryId] + '\nerr' + inspect(err));
+    }
+    return;
+  }
+  // reset count when success
+  local.connectionFailCount[galleryId] = 0;
+
+  // parse title elements
+  const titleElements = Array.prototype.slice.call(jsoup.getElementsByClass('ub-word').toArray());
+  const titleStrings = titleElements
+    .map(v => (''+v).match(/<\/em>(.*?)<\/a>/)[1]);
+
+  if (titleStrings.length === 0) {
+    if (local.dcObservingLastStatus[galleryId] !== 'ERRTITLELISTEMPTY') {
+      local.dcObservingLastStatus[galleryId] = 'ERRTITLELISTEMPTY';
+      reportError(config.TAG + '"' + galleryId + '" 갤러리 포스트 목록 빔.\n캅챠가 예상됨.');
+      (config.TAG + '"' + galleryId + '" 갤러리 포스트 목록 빔.\n캅챠가 예상됨.');
+    }
+    return;
+  }
+
+  // reset status when success
+  local.dcObservingLastStatus[galleryId] = null;
+
+  // TODO: new item detect
   //var s='target',
   //r=Array.prototype.slice.call(Utils.parse('https://gall.dcinside.com/mgallery/board/lists?id=gid').getElementsByClass('ub-word').toArray()).map(v => (''+v).match(/<\/em>(.*?)<\/a>/)[1]).filter(v => { return !!v.match(s) })
   //r.length > 0 ? '검색결과:\n' + r.join('\n') : s + ' 키워드 결과 없음'
@@ -187,23 +242,23 @@ function _runObservingSchedule() {
   // TODO: run multiple dcObserving
 }
 
-function _checkAndAddTask(task, room) {
+function _checkAndAddTask(task) {
   try {
     Utils.parse('https://gall.dcinside.com/mgallery/board/lists?id='
-      + encodeURIComponent(task.gid))
+      + encodeURIComponent(task.gid));
   } catch (err) {
     if (err != null && err.message && err.message.match('Status=404')) {
-      Api.replyRoom(room, config.TAG
+      Api.replyRoom(task.targetRoom, config.TAG
         + '연결 요청 응답 404.\n존재하지 않는 갤러리:\n' + task.gid);
       return;
     }
-    Api.replyRoom(room, config.TAG + '알 수 없는 연결 오류. 등록 실패\n' + err);
+    Api.replyRoom(task.targetRoom, config.TAG + '알 수 없는 연결 오류. 등록 실패\n' + inspect(err));
     return;
   }
 
   local.data.search.push(task);
   saveTask();
-  Api.replyRoom(room, config.TAG + '연결 성공. 패턴 등록 완료')
+  Api.replyRoom(task.targetRoom, config.TAG + '연결 성공. 패턴 등록 완료');
 }
 
 function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId, uid) {
@@ -255,6 +310,7 @@ function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packa
             }
             // task add request
             _checkAndAddTask({
+              targetRoom: room,
               gid: inter.detail.gid,
               pattern: inter.detail.pattern
             }, room);
@@ -273,7 +329,7 @@ function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packa
         + '\n' + inter.detail.pattern.join(', ')
         + '\n\n계속 단어를 입력하거나\n/end 종료 혹은\n/cancel 작업 취소');
       break;
-      
+
     default:
       reportError('Invalid task type: ' + inter.type);
       delete local.interaction[uid];
