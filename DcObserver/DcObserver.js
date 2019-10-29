@@ -59,11 +59,11 @@ function inspect(obj, options, _deep) {
     if (Array.isArray(obj)) {
       var aryStr = '[';
       var first = true;
-      for (var i in obj) {
-        if (!first) objStr += ', ';
-        objStr += ((typeof obj === 'object' && obj !== null)
-          ? inspect(obj[key], options, ++_deep)
-          : '' + obj[key]);
+      for (var i = 0; i < obj.length; i++) {
+        if (!first) aryStr += ', ';
+        aryStr += ((typeof obj === 'object' && obj !== null)
+          ? inspect(obj[i], options, ++_deep)
+          : '' + obj[i]);
         first = false;
       }
 
