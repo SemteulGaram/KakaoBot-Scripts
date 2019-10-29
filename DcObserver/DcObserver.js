@@ -55,13 +55,13 @@ function inspect(obj, options, _deep) {
   _deep = _deep || 0;
 
   if (options.maxDeep <= _deep) return '' + obj;
-  if (typeof obj === 'object' || obj !== null) {
+  if (typeof obj === 'object' && obj !== null) {
     if (Array.isArray(obj)) {
       var aryStr = '[';
       var first = true;
       for (var i in obj) {
         if (!first) objStr += ', ';
-        objStr += ((typeof obj === 'object' || obj !== null)
+        objStr += ((typeof obj === 'object' && obj !== null)
           ? inspect(obj[key], options, ++_deep)
           : '' + obj[key]);
         first = false;
@@ -73,7 +73,7 @@ function inspect(obj, options, _deep) {
       var first = true;
       for (var key in obj) {
         if (!first) objStr += ', ';
-        objStr += key + ': ' + ((typeof obj === 'object' || obj !== null)
+        objStr += key + ': ' + ((typeof obj === 'object' && obj !== null)
           ? inspect(obj[key], options, ++_deep)
           : '' + obj[key]);
         first = false;
@@ -83,6 +83,12 @@ function inspect(obj, options, _deep) {
     }
   }
   return '' + obj;
+}
+
+function generateUid() {
+  var uid = parseInt(Math.random()*0xFFFFFFFF).toString(16);
+  while (uid.length < 8) uid = '0' + uid;
+  return uid;
 }
 
 function isValidScriptName() {
@@ -115,22 +121,22 @@ const local = {
   interaction: {}, // user command interaction data,
   connectionFailCount: {}, // message is sent when config.connectionRetryCount is exceeded (key: galleryId)
   dcObservingLastStatus: {}, // cache of last status (key: galleryId)
-  dcObservingCache: {} // copy of last list to detect new item (key: galleryId)
+  dcObservingCache: {} // copy of last list to detect new item (key: task.uid)
 }
 
 function sendLog() {
   if (Api.canReply(config.targetLogRoom))
-    Api.sendChat(config.targetLogRoom, Array.prototype.slice.call(arguments).map(v => {
-      return (typeof v === 'object' || v !== null) ? inspect(v) : '' + v;
+    Api.replyRoom(config.targetLogRoom, Array.prototype.slice.call(arguments).map(v => {
+      return (typeof v === 'object' && v !== null) ? inspect(v) : '' + v;
     }).join(' '));
 }
 
 function reportError() {
   const log = Array.prototype.slice.call(arguments).map(v => {
-    return (typeof v === 'object' || v !== null) ? inspect(v) : '' + v;
+    return (typeof v === 'object' && v !== null) ? inspect(v) : '' + v;
   }).join(' ');
   Log.error(log);
-  sendLog.call(this, log);
+  sendLog(log);
 }
 
 function loadTask() {
@@ -138,12 +144,12 @@ function loadTask() {
   if (content == null) {
     // init
     local.data = {
-      // { targetRoom: [ChatRoom], gid: [GalleryId], pattern: [ 'match1', 'match2' ] }
+      // { uid: [RandomString], targetRoom: [ChatRoom], gid: [GalleryId], pattern: [ 'match1', 'match2' ] }
       search: []
     }
     return;
   }
-  local.data = content;
+  local.data = JSON.parse(content);
   if (local.data.search == undefined) {
     reportError(config.TAG + 'TaskFile search data missing!');
     local.data.search = {};
@@ -155,19 +161,20 @@ function saveTask() {
   try {
     FileStream.write(config.taskFile, JSON.stringify(local.data));
   } catch (err) {
-    reportError(config.TAG + 'Can not save TaskFile', err);
+    reportError(config.TAG + 'Can not save TaskFile\n' + inspect(err));
   }
 }
 
 function startTaskLoop() {
+  stopTaskLoop();
+
   const task = function () {
-    stopTaskLoop();
     if (!isOn()) {
       return Log.debug(config.TAG + 'task loop terminated due to script disable');
     }
     _runObservingSchedule();
-    startTaskLoop();
   }
+
   local.intervalUid = setTimeout(task.bind(this), config.defaultObserveDelay);
 }
 
@@ -180,9 +187,10 @@ function _dcObserving(galleryId, taskList) {
   // ensure
   local.connectionFailCount[galleryId] = local.connectionFailCount[galleryId] || 0;
   local.dcObservingLastStatus[galleryId] = local.dcObservingLastStatus[galleryId] || null;
-
+  // TODO: remove
+  Log.debug('13|' + galleryId);
   // canReply check
-  const filteredTaskList = taskList.filter(task => { return Api.canReply(task.targetRoom) });
+  const filteredTaskList = taskList.filter(task => Api.canReply(task.targetRoom));
   if (taskList.length === 0) {
     if (local.dcObservingLastStatus[galleryId] !== 'ERRCANTREPLYALL') {
       local.dcObservingLastStatus[galleryId] = 'ERRCANTREPLYALL';
@@ -193,9 +201,10 @@ function _dcObserving(galleryId, taskList) {
     return;
   }
 
+  var jsoup = null;
   try {
-    const url = 'https://gall.dcinside.com/mgallery/board/lists?id=' + encodeURIComponent(galleryId);
-    const jsoup = Utils.parse(url);
+    const url = 'https://gall.dcinside.com/board/lists?id=' + encodeURIComponent(galleryId);
+    jsoup = Utils.parse(url);
   } catch (err) {
     if (++local.connectionFailCount[galleryId] == config.connectionRetryCount) {
       reportError(config.TAG + '연결 실패 횟수 '
@@ -212,14 +221,26 @@ function _dcObserving(galleryId, taskList) {
 
   // parse title elements
   const titleElements = Array.prototype.slice.call(jsoup.getElementsByClass('ub-word').toArray());
-  const titleStrings = titleElements
-    .map(v => (''+v).match(/<\/em>(.*?)<\/a>/)[1]);
+  const titleAndLinks = titleElements
+    .map(v => {
+      const title = v.wholeText();
+      const href = 'https://gall.dcinside.com' + v.getElementsByTag('a').toArray()[0].attr('href');
 
-  if (titleStrings.length === 0) {
+      Log.debug('12-1|' + title);
+      Log.debug('12-2|' + href);
+      return [
+        title,
+        href
+      ];
+    });
+
+  // TODO: remove
+  Log.debug('11|' + titleAndLinks.map(v => v.join('/')).join(', '));
+
+  if (titleAndLinks.length === 0) {
     if (local.dcObservingLastStatus[galleryId] !== 'ERRTITLELISTEMPTY') {
       local.dcObservingLastStatus[galleryId] = 'ERRTITLELISTEMPTY';
       reportError(config.TAG + '"' + galleryId + '" 갤러리 포스트 목록 빔.\n캅챠가 예상됨.');
-      (config.TAG + '"' + galleryId + '" 갤러리 포스트 목록 빔.\n캅챠가 예상됨.');
     }
     return;
   }
@@ -227,24 +248,76 @@ function _dcObserving(galleryId, taskList) {
   // reset status when success
   local.dcObservingLastStatus[galleryId] = null;
 
-  // TODO: new item detect
-  //var s='target',
-  //r=Array.prototype.slice.call(Utils.parse('https://gall.dcinside.com/mgallery/board/lists?id=gid').getElementsByClass('ub-word').toArray()).map(v => (''+v).match(/<\/em>(.*?)<\/a>/)[1]).filter(v => { return !!v.match(s) })
-  //r.length > 0 ? '검색결과:\n' + r.join('\n') : s + ' 키워드 결과 없음'
+  var task = null;
+  for (var i in filteredTaskList) {
+    task = filteredTaskList[i];
+    // TODO: task valid test
+    const matchedTitles = titleAndLinks.filter(v => {
+      var match = true;
+      for (var j in task.pattern) {
+        if (!v[0].includes(task.pattern[j])) {
+          match = false;
+          break;
+        }
+      }
+      return match;
+    });
+
+    // first run ignored
+    if (local.dcObservingCache[task.uid] != null) {
+      for (var j in matchedTitles) {
+        // new post detected
+        if (local.dcObservingCache[task.uid].indexOf(matchedTitles[j][1]) === -1) {
+          if (Api.canReply(task.targetRoom)) Api.replyRoom(task.targetRoom,
+            config.TAG + '@게시글알림 [' + task.uid
+              + ']\n' + task.pattern.join(', ')
+              + '\n위 조건에 맞는 새 게시글이 등록되었습니다.'
+              + '\n\n' + matchedTitles[j][0]
+              + '\n' + matchedTitles[j][1]);
+        }
+      }
+    }
+
+    local.dcObservingCache[task.uid] = matchedTitles.map(v => v[1]);
+  }
 }
 
 function _runObservingSchedule() {
-  if (local.intervalUid !== null) {
-    clearTimeout(local.intervalUid);
-    local.intervalUid = null;
+  stopTaskLoop();
+
+  // valid check
+  if (!local.data || !local.data.search) {
+    reportError(config.TAG
+      + '_runObservingSchedule> 데이터가 로드되거나 초기화되지 못한 상태에서 작업 루프가 시작됨.'
+      + '\n작업 루프가 강제로 중지됩니다');
+    return;
   }
 
-  // TODO: run multiple dcObserving
+  // merge requests from the same gallery
+  // { "[galleryId]": [[Task], [Task], ...], "[galleryId2]": ... }
+  const requestList = new Map();
+  var task = null;
+  var list = null;
+  for (var i in local.data.search) {
+    task = local.data.search[i];
+    list = requestList.get(task.gid);
+    if (list === undefined) list = [];
+    list.push(task);
+    requestList.set(task.gid, list);
+  }
+
+  // do request
+  const requestGalleryIds = Array.from(requestList.keys());
+  for (var i in requestGalleryIds) {
+    _dcObserving(requestGalleryIds[i], requestList.get(requestGalleryIds[i]));
+  }
+
+  startTaskLoop();
 }
 
 function _checkAndAddTask(task) {
   try {
-    Utils.parse('https://gall.dcinside.com/mgallery/board/lists?id='
+    Utils.parse('https://gall.dcinside.com/board/lists?id='
       + encodeURIComponent(task.gid));
   } catch (err) {
     if (err != null && err.message && err.message.match('Status=404')) {
@@ -258,7 +331,8 @@ function _checkAndAddTask(task) {
 
   local.data.search.push(task);
   saveTask();
-  Api.replyRoom(task.targetRoom, config.TAG + '연결 성공. 패턴 등록 완료');
+  Api.replyRoom(task.targetRoom, config.TAG + 'ID:[' + task.uid
+    + ']\n연결 성공. 패턴 등록 완료');
 }
 
 function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId, uid) {
@@ -309,7 +383,9 @@ function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packa
               break;
             }
             // task add request
+            const rid = generateUid()
             _checkAndAddTask({
+              uid: rid,
               targetRoom: room,
               gid: inter.detail.gid,
               pattern: inter.detail.pattern
@@ -340,15 +416,20 @@ function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packa
   return true;
 }
 
+// TODO: loop dead detect
 function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId) {
   // initialize handle
   if (!local.init) {
     if (!isValidScriptName()) {
+      Log.error(config.TAG + 'invalid script name detected');
       return;
     }
     loadTask();
     startTaskLoop();
     local.init = true;
+    Log.info(config.TAG + 'initialized');
+    // TODO: remove
+    reportError(config.TAG + 'reportError test');
   }
 
   // command handle
@@ -358,6 +439,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 
   // user interact handle
   if (local.interaction[uid]) {
+    Log.debug(config.TAG + 'user interaction - ' + room + '/' + sender + '/' + msg);
     if (userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId, uid)) return;
   }
 
