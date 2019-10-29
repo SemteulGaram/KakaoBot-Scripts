@@ -169,10 +169,15 @@ function startTaskLoop() {
   stopTaskLoop();
 
   const task = function () {
-    if (!isOn()) {
-      return Log.debug(config.TAG + 'task loop terminated due to script disable');
+    try {
+      if (!isOn()) {
+        return Log.debug(config.TAG + 'task loop terminated due to script disable');
+      }
+      _runObservingSchedule();
+    } catch (err) {
+      reportError(config.TAG + '작업 루프에서 핸들링 되지 않은 오류 발생'
+        + '\n' + inspect(err));
     }
-    _runObservingSchedule();
   }
 
   local.intervalUid = setTimeout(task.bind(this), config.defaultObserveDelay);
