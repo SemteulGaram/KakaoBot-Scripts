@@ -489,7 +489,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
         type: 'addObserver|1'
       };
       replier.reply(config.TAG + '갤러리 ID를 입력하세요'
-        + '\n\n(예시: 갤러리 페이지 주소의 https://gall.dcinside.com/mgallery/board/lists?id=[아이디] 부분의 아이디를 입력하세요)'
+        + '\n\n(예시: 갤러리 페이지 주소의 https://gall.dcinside.com/board/lists?id=[아이디] 부분의 아이디를 입력하세요)'
         + '\n\n/cancel 작업 취소');
       break;
   }
