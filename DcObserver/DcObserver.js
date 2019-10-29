@@ -229,7 +229,7 @@ function _dcObserving(galleryId, isMinor, taskList) {
   const titleElements = Array.prototype.slice.call(jsoup.getElementsByClass('ub-word').toArray());
   const titleAndLinks = titleElements
     .map(v => {
-      const title = v.wholeText().replace('\n', '');
+      const title = v.wholeText().replace('\n', '').replace(/^\s+|\s+$/g, '');
       const href = 'https://gall.dcinside.com' + v.getElementsByTag('a').toArray()[0].attr('href');
 
       return [
