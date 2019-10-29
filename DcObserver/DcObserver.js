@@ -223,7 +223,7 @@ function _dcObserving(galleryId, taskList) {
   const titleElements = Array.prototype.slice.call(jsoup.getElementsByClass('ub-word').toArray());
   const titleAndLinks = titleElements
     .map(v => {
-      const title = v.wholeText();
+      const title = v.wholeText().replace('\n', '');
       const href = 'https://gall.dcinside.com' + v.getElementsByTag('a').toArray()[0].attr('href');
 
       Log.debug('12-1|' + title);
