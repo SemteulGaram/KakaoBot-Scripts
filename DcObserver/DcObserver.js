@@ -144,7 +144,7 @@ function loadTask() {
   if (content == null) {
     // init
     local.data = {
-      // { uid: [RandomString], targetRoom: [ChatRoom], gid: [GalleryId], pattern: [ 'match1', 'match2' ] }
+      // { uid: [RandomString], targetRoom: [ChatRoom], gid: [GalleryId], isMinor: [isMinorGallery] pattern: [ 'match1', 'match2' ] }
       search: []
     }
     return;
@@ -183,12 +183,11 @@ function stopTaskLoop() {
   local.intervalUid = null;
 }
 
-function _dcObserving(galleryId, taskList) {
+function _dcObserving(galleryId, isMinor, taskList) {
   // ensure
   local.connectionFailCount[galleryId] = local.connectionFailCount[galleryId] || 0;
   local.dcObservingLastStatus[galleryId] = local.dcObservingLastStatus[galleryId] || null;
-  // TODO: remove
-  Log.debug('13|' + galleryId);
+
   // canReply check
   const filteredTaskList = taskList.filter(task => Api.canReply(task.targetRoom));
   if (taskList.length === 0) {
@@ -203,7 +202,9 @@ function _dcObserving(galleryId, taskList) {
 
   var jsoup = null;
   try {
-    const url = 'https://gall.dcinside.com/board/lists?id=' + encodeURIComponent(galleryId);
+    const url = (isMinor
+      ? 'https://gall.dcinside.com/mgallery/board/lists?id='
+      : 'https://gall.dcinside.com/board/lists?id=') + encodeURIComponent(galleryId);
     jsoup = Utils.parse(url);
   } catch (err) {
     if (++local.connectionFailCount[galleryId] == config.connectionRetryCount) {
@@ -226,21 +227,17 @@ function _dcObserving(galleryId, taskList) {
       const title = v.wholeText().replace('\n', '');
       const href = 'https://gall.dcinside.com' + v.getElementsByTag('a').toArray()[0].attr('href');
 
-      Log.debug('12-1|' + title);
-      Log.debug('12-2|' + href);
       return [
         title,
         href
       ];
     });
 
-  // TODO: remove
-  Log.debug('11|' + titleAndLinks.map(v => v.join('/')).join(', '));
-
   if (titleAndLinks.length === 0) {
     if (local.dcObservingLastStatus[galleryId] !== 'ERRTITLELISTEMPTY') {
       local.dcObservingLastStatus[galleryId] = 'ERRTITLELISTEMPTY';
-      reportError(config.TAG + '"' + galleryId + '" 갤러리 포스트 목록 빔.\n캅챠가 예상됨.');
+      reportError(config.TAG + '"' + galleryId + '" 갤러리 포스트 목록 빔.'
+        + '\n마이너 갤러리를 혼동하였거나 캅챠가 예상됨.');
     }
     return;
   }
@@ -309,7 +306,7 @@ function _runObservingSchedule() {
   // do request
   const requestGalleryIds = Array.from(requestList.keys());
   for (var i in requestGalleryIds) {
-    _dcObserving(requestGalleryIds[i], requestList.get(requestGalleryIds[i]));
+    _dcObserving(requestGalleryIds[i], requestList.get(requestGalleryIds[i])[0].isMinor, requestList.get(requestGalleryIds[i]));
   }
 
   startTaskLoop();
@@ -317,7 +314,9 @@ function _runObservingSchedule() {
 
 function _checkAndAddTask(task) {
   try {
-    Utils.parse('https://gall.dcinside.com/board/lists?id='
+    Utils.parse((task.isMinor
+      ? 'https://gall.dcinside.com/mgallery/board/lists?id='
+      : 'https://gall.dcinside.com/board/lists?id=')
       + encodeURIComponent(task.gid));
   } catch (err) {
     if (err != null && err.message && err.message.match('Status=404')) {
@@ -331,7 +330,7 @@ function _checkAndAddTask(task) {
 
   local.data.search.push(task);
   saveTask();
-  Api.replyRoom(task.targetRoom, config.TAG + 'ID:[' + task.uid
+  Api.replyRoom(task.targetRoom, config.TAG + 'ID[' + task.uid
     + ']\n연결 성공. 패턴 등록 완료');
 }
 
@@ -354,14 +353,17 @@ function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packa
         var cmd = msg.split(' ');
         switch(cmd[0]) {
           default:
-            replier.reply(config.TAG + '유효하지 않은 명령어:\n' + msg);
+            replier.reply(config.TAG + '유효하지 않은 명령어:\n' + msg
+              + '\n/cancel 현 작업 취소');
         }
         break;
       }
 
       // new pattern
       replier.reply(config.TAG + '추가될 갤러리 ID:\n' + msg
-        + '\n\n제목에서 감지할 단어 입력하세요'
+        + '\n\n갤러리가 일반 갤러리면 "일반"'
+        + '\n마이너 갤러리면 "마이너"'
+        + '\n를 입력해주세요'
         + '\n/cancel 작업 취소');
 
       inter.detail = {};
@@ -371,6 +373,33 @@ function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packa
       break;
 
     case 'addObserver|2':
+      // command handle
+      if (msg[0] === '/') {
+        var cmd = msg.split(' ');
+        switch(cmd[0]) {
+          default:
+            replier.reply(config.TAG + '유효하지 않은 명령어:\n' + msg
+              + '\n/cancel 현 작업 취소');
+        }
+        break;
+      }
+
+      if (['일반', '마이너'].indexOf(msg) === -1) {
+        replier.reply(config.TAG + '"일반", "마이너" 둘 중 하나를 입력해주세요'
+          + '\n/cancel 작업 취소');
+      } else {
+        // minor gallery detect
+        const isMinor = msg === '마이너';
+        replier.reply(config.TAG + inter.detail.gid  + ' 갤러리를 "' + msg + '" 타입으로 등록합니다.'
+          + '\n\n제목에서 감지할 단어 입력하세요'
+          + '\n/cancel 작업 취소');
+
+        inter.detail.isMinor = isMinor;
+        inter.type = 'addObserver|3';
+      }
+      break;
+
+    case 'addObserver|3':
       // command handle
       if (msg[0] === '/') {
         var cmd = msg.split(' ');
@@ -388,6 +417,7 @@ function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packa
               uid: rid,
               targetRoom: room,
               gid: inter.detail.gid,
+              isMinor: inter.detail.isMinor,
               pattern: inter.detail.pattern
             }, room);
             // delete interaction
@@ -395,7 +425,8 @@ function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packa
             break;
 
           default:
-            replier.reply(config.TAG + '유효하지 않은 명령어:\n' + msg);
+            replier.reply(config.TAG + '유효하지 않은 명령어:\n' + msg
+              + '\n/cancel 현 작업 취소');
         }
         break;
       }
@@ -428,8 +459,6 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
     startTaskLoop();
     local.init = true;
     Log.info(config.TAG + 'initialized');
-    // TODO: remove
-    reportError(config.TAG + 'reportError test');
   }
 
   // command handle
