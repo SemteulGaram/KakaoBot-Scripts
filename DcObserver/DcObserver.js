@@ -271,8 +271,8 @@ function _dcObserving(galleryId, isMinor, taskList) {
         // new post detected
         if (local.dcObservingCache[task.uid].indexOf(matchedTitles[j][1]) === -1) {
           if (Api.canReply(task.targetRoom)) Api.replyRoom(task.targetRoom,
-            config.TAG + '@게시글알림 [' + task.uid
-              + ']\n' + task.pattern.join(', ')
+            config.TAG + '게시글알림 @' + task.uid
+              + '\n' + task.pattern.join(', ')
               + '\n위 조건에 맞는 새 게시글이 등록되었습니다.'
               + '\n\n' + matchedTitles[j][0]
               + '\n' + matchedTitles[j][1]);
@@ -335,8 +335,8 @@ function _checkAndAddTask(task) {
 
   local.data.search.push(task);
   saveTask();
-  Api.replyRoom(task.targetRoom, config.TAG + 'ID[' + task.uid
-    + ']\n연결 성공. 패턴 등록 완료');
+  Api.replyRoom(task.targetRoom, config.TAG + ']\n연결 성공. 패턴 등록 완료'
+    + '호출 아이디: @' + task.uid);
 }
 
 function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId, uid) {
