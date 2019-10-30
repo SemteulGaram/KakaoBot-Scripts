@@ -295,6 +295,9 @@ function _runObservingSchedule() {
     return;
   }
 
+  // valid check
+  dataValidCheck();
+
   // merge requests from the same gallery
   // { "[galleryId]": [[Task], [Task], ...], "[galleryId2]": ... }
   const requestList = new Map();
@@ -337,6 +340,25 @@ function _checkAndAddTask(task) {
   saveTask();
   Api.replyRoom(task.targetRoom, config.TAG + '연결 성공. 패턴 등록 완료'
     + '\n호출 아이디: @' + task.uid);
+}
+
+function dataValidCheck() {
+  if (!local.data) local.data = { search: [] };
+  var task = null;
+  for (var i = local.data.search.length - 1; i >= 0; i--) {
+    task = local.data.search[i];
+    if (!task
+      || !task.uid.match(/^[0-9a-f]{8}$/)
+      || !task.gid
+      || !Array.isArray(task.pattern)
+      || task.pattern.filter(v => { return typeof v !== 'string' }).length > 0
+      || !task.targetRoom) {
+
+      reportError(config.TAG + '잘못된 작업 감지되어 삭제함:\n' + inspect(task));
+      local.data.search.splice(i, 1);
+      saveTask();
+    }
+  }
 }
 
 function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId, uid) {
@@ -466,6 +488,9 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
     Log.info(config.TAG + 'initialized');
   }
 
+  // valid check
+  dataValidCheck();
+
   // command handle
   // TODO: whitelist blacklist check
   msg += '';
@@ -516,8 +541,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
       for (var i in local.data.search) {
         task = local.data.search[i];
         if (task.targetRoom === room && task.uid === cmd[1]) {
-          match = true;
-          delete local.data.search[i];
+          local.data.search.splice(i, 1);
           saveTask();
           replier.reply(config.TAG + '키워드 알림 삭제됨: ' + cmd[1]);
           return;
