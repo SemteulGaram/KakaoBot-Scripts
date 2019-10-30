@@ -335,8 +335,8 @@ function _checkAndAddTask(task) {
 
   local.data.search.push(task);
   saveTask();
-  Api.replyRoom(task.targetRoom, config.TAG + ']\n연결 성공. 패턴 등록 완료'
-    + '호출 아이디: @' + task.uid);
+  Api.replyRoom(task.targetRoom, config.TAG + '연결 성공. 패턴 등록 완료'
+    + '\n호출 아이디: @' + task.uid);
 }
 
 function userInteraction(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId, uid) {
@@ -482,7 +482,9 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
   switch (cmd[0]) {
     case '/help':
       replier.reply('[DcObserver 도움말]'
-        + '\n/addObserver - 제목 키워드 알림 추가');
+        + '\n/addObserver - 제목 키워드 알림 추가'
+        + '\n/listObserver - 등록된 키워드 알림 보기'
+        + '\n/removeObserver <아아디> - 키워드 알림 삭제');
       break;
     case '/addObserver':
       local.interaction[uid] = {
@@ -491,6 +493,37 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
       replier.reply(config.TAG + '갤러리 ID를 입력하세요'
         + '\n\n(예시: 갤러리 페이지 주소의 https://gall.dcinside.com/board/lists?id=[아이디] 부분의 아이디를 입력하세요)'
         + '\n\n/cancel 작업 취소');
+      break;
+    case '/listObserver':
+      const roomTask = local.data.search.filter(task => { return task.targetRoom === room });
+      if (roomTask.length === 0) {
+        replier.reply(config.TAG + '이 방에 등록된 키워드 알림이 없습니다.');
+      } else {
+        replier.reply(config.TAG + '등록된 키워드 알림 [' + roomTask.length + ']\n\n'
+          + roomTask.map(task => {
+            return task.gid + (task.isMinor ? ' 마이너' : '') + ' 갤러리'
+             + '\n키워드[' + task.pattern.join(',') + ']'
+             + '\n아이디: ' + task.uid;
+          }).join('\n----------\n'));
+      }
+      break;
+    case '/removeObserver':
+      if (!cmd[1]) {
+        replier.reply(config.TAG + '사용법: /removeObserver <아이디>');
+        return;
+      }
+      var task = null;
+      for (var i in local.data.search) {
+        task = local.data.search[i];
+        if (task.targetRoom === room && task.uid === cmd[1]) {
+          match = true;
+          delete local.data.search[i];
+          saveTask();
+          replier.reply(config.TAG + '키워드 알림 삭제됨: ' + cmd[1]);
+          return;
+        }
+      }
+      replier.reply(config.TAG + '해당 아이디의 키워드 알림을 찾을 수 없습니다: ' + cmd[1]);
       break;
   }
 }
