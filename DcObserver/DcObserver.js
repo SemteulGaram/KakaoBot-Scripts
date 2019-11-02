@@ -255,7 +255,7 @@ function _dcObserving(galleryId, isMinor, taskList) {
     task = filteredTaskList[i];
     const matchedTitles = titleAndLinks.filter(v => {
       var match = true;
-      for (var j = 0; j > task.pattern.length; j++) {
+      for (var j = 0; j < task.pattern.length; j++) {
         if (!v[0].includes(task.pattern[j])) {
           match = false;
           break;
